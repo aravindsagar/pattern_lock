@@ -23,6 +23,8 @@ public class PatternGridView extends View implements PatternInterface{
     private static final int NUMBER_OF_COLUMNS = 3;
     private static final int NUMBER_OF_ROWS = 3;
 
+    private final float minCellSize = getResources().getDimension(R.dimen.min_cell_size);
+
     private int mPatternType;
 
     private int mPaddingLeft, mPaddingRight, mPaddingTop, mPaddingBottom;
@@ -33,9 +35,18 @@ public class PatternGridView extends View implements PatternInterface{
 
     private CellTracker mCellTracker = new CellTracker();
 
-    private Paint mDotPaint, mLinePaint, mTrianglePaint;
+    private Paint mInnerCirclePaint, mOuterCirclePaint, mLinePaint, mTrianglePaint;
 
-    private int[][] mCellCenters = new int[NUMBER_OF_ROWS][NUMBER_OF_COLUMNS];
+    private int[] mRowCenters = new int[NUMBER_OF_ROWS];
+    private int[] mColumnCenters = new int[NUMBER_OF_COLUMNS];
+
+    private int mInnerCircleRadius = (int) getResources().getDimension(R.dimen.inner_circle_radius),
+            mOuterCircleRadius = (int) getResources().getDimension(R.dimen.outer_circle_radius);
+
+    private boolean isInputEnabled = false, isInitializing = true;
+
+    private enum PatternState{BLANK, IN_PROGRESS, ENTERED};
+    private PatternState patternState = PatternState.BLANK;
 
     public PatternGridView(Context context, AttributeSet attributeSet){
         super(context, attributeSet);
@@ -46,12 +57,18 @@ public class PatternGridView extends View implements PatternInterface{
         }finally {
             styledAttributes.recycle();
         }
+        setAlpha(0.0f);
+//        setTranslationY(getTranslationY() + 50);
         init();
     }
 
     private void init(){
-        mDotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        mDotPaint.setStyle(Paint.Style.FILL);
+        mInnerCirclePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mInnerCirclePaint.setStyle(Paint.Style.FILL);
+
+        mOuterCirclePaint= new Paint(Paint.ANTI_ALIAS_FLAG);
+        mOuterCirclePaint.setStyle(Paint.Style.STROKE);
+        mOuterCirclePaint.setStrokeWidth(mInnerCircleRadius);
 
         mTrianglePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mTrianglePaint.setStyle(Paint.Style.FILL);
@@ -65,12 +82,14 @@ public class PatternGridView extends View implements PatternInterface{
 
         switch (mPatternType){
             case PATTERN_TYPE_STORE:
-                mDotPaint.setColor(Color.BLACK);
+                mInnerCirclePaint.setColor(Color.BLACK);
+                mOuterCirclePaint.setColor(Color.BLACK);
                 mTrianglePaint.setColor(Color.BLACK);
                 mLinePaint.setColor(Color.BLACK);
                 break;
             case PATTERN_TYPE_CHECK:
-                mDotPaint.setColor(Color.WHITE);
+                mInnerCirclePaint.setColor(Color.WHITE);
+                mOuterCirclePaint.setColor(Color.WHITE);
                 mTrianglePaint.setColor(Color.WHITE);
                 mLinePaint.setColor(Color.WHITE);
                 break;
@@ -80,6 +99,7 @@ public class PatternGridView extends View implements PatternInterface{
         mPaddingRight = getPaddingRight();
         mPaddingTop = getPaddingTop();
         mPaddingBottom = getPaddingBottom();
+        Log.d(VIEW_LOG_TAG, "Min cell size: " + minCellSize);
     }
 
     public int getPatternType() {
@@ -99,7 +119,7 @@ public class PatternGridView extends View implements PatternInterface{
 
     @Override
     public List<Integer> getPattern() {
-        return null;
+        return mCellTracker.getCellNumberList();
     }
 
     @Override
@@ -118,12 +138,12 @@ public class PatternGridView extends View implements PatternInterface{
 
     @Override
     protected int getSuggestedMinimumHeight() {
-        return NUMBER_OF_ROWS * R.dimen.min_cell_size;
+        return (int) (NUMBER_OF_ROWS * minCellSize);
     }
 
     @Override
     protected int getSuggestedMinimumWidth() {
-        return NUMBER_OF_COLUMNS * R.dimen.min_cell_size;
+        return (int) (NUMBER_OF_COLUMNS * minCellSize);
     }
 
     @Override
@@ -131,20 +151,23 @@ public class PatternGridView extends View implements PatternInterface{
         int width = w - (mPaddingLeft + mPaddingRight);
         int height = h - (mPaddingTop + mPaddingBottom);
 
-        mCellHeight = h/(float) NUMBER_OF_ROWS;
-        mCellWidth = w/(float) NUMBER_OF_COLUMNS;
-
+        mCellHeight = height/(float) NUMBER_OF_ROWS;
+        mCellWidth = width/(float) NUMBER_OF_COLUMNS;
+        mOuterCircleRadius = Math.max ((int) (mCellWidth/4.0) + mInnerCircleRadius, mOuterCircleRadius);
+        computePositions();
         super.onSizeChanged(w, h, oldw, oldh);
     }
 
     private void computePositions(){
-        int x, y = mPaddingTop;
-        for(int i=0; i<NUMBER_OF_ROWS; i++){
-            x = mPaddingLeft;
-            for(int j=0; j<NUMBER_OF_COLUMNS; j++){
-                
-                x+=mCellWidth;
-            }
+        int x = mPaddingLeft;
+        Log.d(VIEW_LOG_TAG, "padding = " + mPaddingLeft);
+        for (int i = 0; i < NUMBER_OF_COLUMNS; i++) {
+            mColumnCenters[i] = (int) (x + mCellWidth/2.0);
+            x += mCellWidth;
+        }
+        int y = mPaddingTop;
+        for (int i = 0; i < NUMBER_OF_ROWS; i++) {
+            mRowCenters[i] = (int) (y + mCellHeight/2.0);
             y += mCellHeight;
         }
     }
@@ -157,7 +180,8 @@ public class PatternGridView extends View implements PatternInterface{
         int viewHeight = resolveMeasured(heightMeasureSpec, minimumHeight);
 
         int viewDimension = Math.min(viewHeight, viewWidth);
-        super.onMeasure(viewDimension, viewDimension);
+        Log.d(VIEW_LOG_TAG, "View dimension = " + viewDimension);
+        setMeasuredDimension(viewDimension, viewDimension);
     }
 
     private int resolveMeasured(int measureSpec, int desired) {
@@ -165,10 +189,13 @@ public class PatternGridView extends View implements PatternInterface{
         int specSize = MeasureSpec.getSize(measureSpec);
         switch (MeasureSpec.getMode(measureSpec)) {
             case MeasureSpec.UNSPECIFIED:
-                result = desired;
+                if((float) measureSpec < 1.2 * desired)
+                    result = Math.max(specSize, desired);
+                else
+                    result = desired;
                 break;
             case MeasureSpec.AT_MOST:
-                result = Math.max(specSize, desired);
+                result = Math.min(specSize, desired);
                 break;
             case MeasureSpec.EXACTLY:
             default:
@@ -201,11 +228,24 @@ public class PatternGridView extends View implements PatternInterface{
         public List<Integer> getCellNumberList(){
             return mCellList;
         }
+
+        public void clear(){
+            mCellList.clear();
+        }
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-
+        if(isInitializing){
+            animate().alpha(1f).setDuration(750).start();
+            isInitializing = false;
+            isInputEnabled = true;
+        }
+        for (int i = 0; i < NUMBER_OF_ROWS; i++) {
+            for (int j = 0; j < NUMBER_OF_COLUMNS; j++) {
+                canvas.drawCircle(mColumnCenters[i], mRowCenters[j], mInnerCircleRadius, mInnerCirclePaint);
+            }
+        }
     }
 }

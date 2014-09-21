@@ -1,6 +1,7 @@
 package com.sagar.trying_own_pattern_lock;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -65,6 +66,8 @@ public class MyActivity extends Activity {
         int dotNumber = findDot(event);
         dotsList.add(dotNumber);
         dots[dotNumber].setImageResource(R.drawable.aosp_indicator_code_lock_point_area_blue_holo);
+        Intent intent = new Intent(this, MyActivity2.class);
+        startActivity(intent);
     }
 
     private void handleActionMove(MotionEvent event){
