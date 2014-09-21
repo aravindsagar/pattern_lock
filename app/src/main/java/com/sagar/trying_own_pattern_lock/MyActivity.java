@@ -3,7 +3,6 @@ package com.sagar.trying_own_pattern_lock;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -71,18 +70,18 @@ public class MyActivity extends Activity {
     }
 
     private void handleActionMove(MotionEvent event){
-        Log.d(LOG_TAG, "Move on " + findDot(event));
+//        Log.d(LOG_TAG, "Move on " + findDot(event));
         int dotNumber = findDot(event);
         dotsList.add(dotNumber);
         dots[dotNumber].setImageResource(R.drawable.aosp_indicator_code_lock_point_area_blue_holo);
     }
 
     private void handleActionUp(MotionEvent event){
-        Log.d(LOG_TAG, "Up on " + findDot(event));
+//        Log.d(LOG_TAG, "Up on " + findDot(event));
     }
 
     private void handleActionCancel(MotionEvent event){
-        Log.d(LOG_TAG, "Cancel on " + findDot(event));
+//        Log.d(LOG_TAG, "Cancel on " + findDot(event));
     }
 
     private int findDot(MotionEvent event){
